@@ -1,0 +1,27 @@
+name: camgrabber
+services:
+  app:
+    build: .
+    container_name: camgrabber
+    restart: unless-stopped
+    ports:
+      - "${BIND_IP:-127.0.0.1}:${HOST_PORT:-8099}:8080"   # админ-страница, только чтение
+    environment:
+      TZ: Europe/Moscow
+      SAVE_ROOT: /timelapse
+      SERVERS_FILE: /app/servers.json
+      OWNER_UID: "1000"   # mike: тот же владелец, что у samba (force user)
+      OWNER_GID: "1000"
+      KEEP_FULL_DAYS: "183"          # минутные снимки хранятся ~6 месяцев
+      CLEAN_LOOKBACK_DAYS: "36500"   # прореживать все более старые дни
+      CLEAN_HOUR: "3"
+      STATE_FILE: /state/stats.json
+      HTTP_PORT: "8080"
+      CLEAN_DRY_RUN: "${CLEAN_DRY_RUN:-1}"
+    volumes:
+      - ${TIMELAPSE_PATH:-/mnt/nas/timelapse}:/timelapse
+      - ./servers.json:/app/servers.json:ro
+      - ./state:/state
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}

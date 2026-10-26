@@ -1,0 +1,104 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Настройки - Camgrabber</title>
+<style>
+:root{--bg:#fff;--fg:#1d2330;--mut:#667;--line:#dde1e8;--ok:#1a7f37;--bad:#c62828;--fill:#3d6fd9;--box:#eef1f7}
+@media(prefers-color-scheme:dark){:root{--bg:#15181f;--fg:#e6e9ef;--mut:#99a;--line:#2b303b;--ok:#4cc26a;--bad:#ff6b6b;--fill:#6c97f2;--box:#1f242e}}
+body{font:14px system-ui,sans-serif;background:var(--bg);color:var(--fg);margin:0;padding:16px;max-width:1100px}
+h1{font-size:20px;margin:0 0 12px}h2{font-size:16px;margin:0 0 4px}a{color:inherit}small{color:var(--mut)}
+.card{border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:14px}
+.card small{display:block;margin:4px 0 10px}
+.fld{margin:8px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.fld input{width:90px}.fld small{margin:0}
+#summary{margin-top:12px;padding:10px;border-radius:6px;background:var(--box);line-height:1.5}#summary.bad{color:var(--bad)}
+input,button{font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);min-width:0}
+input[type=checkbox]{width:18px;height:18px;padding:0}
+button{cursor:pointer}button.primary{background:var(--fill);color:#fff;border-color:var(--fill);padding:7px 18px}
+.srv{display:grid;grid-template-columns:130px 1fr 1fr 1.2fr auto;gap:6px;align-items:start;margin-bottom:8px}
+.srv .res{grid-column:1/-1;font-size:12px;color:var(--mut)}.srv .res.bad{color:var(--bad)}
+.srv .btns{display:flex;gap:4px}
+#smsg{margin-left:10px;font-size:13px}
+@media(max-width:900px){.srv{grid-template-columns:1fr}}
+</style></head><body>
+<h1>Настройки</h1><p><a href="/">&larr; к камерам</a></p>
+
+<div class="card"><h2>Съёмка и хранение</h2>
+<div class="fld">Частота снимков: раз в <input type="number" id="interval" min="1" max="60" value="1"> минут</div>
+<div class="fld">Хранить все снимки, дней: <input type="number" id="keep" min="0" max="36500" placeholder="0"> <small>0 или пусто: ничего не удалять</small></div>
+<div class="fld" id="thinrow">Потом оставлять снимок раз в <input type="number" id="thin" min="1" max="1440" value="5"> минут <small>должно делиться на частоту снимков</small></div>
+<div id="summary"></div>
+</div>
+
+<div class="card"><h2>Серверы Frigate</h2>
+<small>Откуда берётся список камер. Имя сервера задаёт префикс папок архива (<code>имя_камера</code>), его лучше не менять у работающего сервера.</small>
+<div id="srv"></div>
+<button id="sadd" type="button">+ Добавить сервер</button>
+</div>
+
+<button id="ssave" type="button" class="primary">Сохранить</button><span id="smsg"></span>
+
+<script>
+(() => {
+const box = document.getElementById("srv"), msg = document.getElementById("smsg");
+const iv = document.getElementById("interval"), keep = document.getElementById("keep"), thin = document.getElementById("thin"), thinrow = document.getElementById("thinrow"), summary = document.getElementById("summary");
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const aliasText = a => Object.entries(a || {}).map(([k, v]) => k + "=" + v).join(", ");
+const parseAliases = t => {
+  const o = {};
+  t.split(",").map(x => x.trim()).filter(Boolean).forEach(p => { const i = p.indexOf("="); if (i > 0) o[p.slice(0, i).trim()] = p.slice(i + 1).trim(); });
+  return o;
+};
+async function post(u, b) {
+  const r = await fetch(u, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.status);
+  return j;
+}
+function refresh() {
+  const n = parseInt(iv.value, 10) || 1, d = parseInt(keep.value, 10) || 0, m = parseInt(thin.value, 10) || 0;
+  thinrow.style.opacity = d > 0 ? 1 : 0.45; thin.disabled = d <= 0;
+  const base = n === 1 ? "Кадр с каждой камеры сохраняется каждую минуту" : `Кадр с каждой камеры сохраняется раз в ${n} мин`;
+  let txt, bad = false;
+  if (d <= 0) txt = `${base}. Ничего не удаляется, все снимки хранятся бессрочно.`;
+  else if (m % n !== 0 || m < n) { bad = true; txt = `Оставляемая частота (${m} мин) должна делиться на частоту съёмки (${n} мин).`; }
+  else if (m === n) txt = `${base}. Прореживания нет, ничего не удаляется.`;
+  else txt = `${base}. Снимки старше ${d} дн. прореживаются: остаётся кадр раз в ${m} мин, остальные удаляются, оставшиеся хранятся бессрочно.`;
+  summary.textContent = txt; summary.className = bad ? "bad" : "";
+}
+[iv, keep, thin].forEach(i => i.addEventListener("input", refresh));
+function row(s) {
+  const d = document.createElement("div");
+  d.className = "srv";
+  d.innerHTML = `<input class="n" placeholder="имя (hpserver)" value="${esc(s.name)}">
+    <input class="f" placeholder="Frigate http://адрес:5000" value="${esc(s.frigate)}">
+    <input class="g" placeholder="go2rtc http://адрес:1984 (необязательно)" value="${esc(s.go2rtc)}">
+    <input class="a" placeholder="замены имён: cam_abc=car, cam_def=entrance" value="${esc(aliasText(s.aliases))}">
+    <div class="btns"><button type="button" class="t">Проверить</button><button type="button" class="x">Удалить</button></div>
+    <div class="res"></div>`;
+  d.querySelector(".x").onclick = () => d.remove();
+  d.querySelector(".t").onclick = async () => {
+    const res = d.querySelector(".res"); res.className = "res"; res.textContent = "проверяю...";
+    try {
+      const j = await post("/api/settings/test", { frigate: d.querySelector(".f").value.trim(), go2rtc: d.querySelector(".g").value.trim() });
+      res.textContent = `Frigate ${j.version}, камер: ${j.cameras.length} (${j.cameras.join(", ")})` + (j.go2rtc == null ? "" : `; go2rtc потоков: ${j.go2rtc}`);
+    } catch (e) { res.className = "res bad"; res.textContent = "Ошибка: " + e.message; }
+  };
+  box.appendChild(d);
+}
+const collect = () => [...box.children].map(d => ({
+  name: d.querySelector(".n").value.trim(), frigate: d.querySelector(".f").value.trim(),
+  go2rtc: d.querySelector(".g").value.trim(), aliases: parseAliases(d.querySelector(".a").value)
+}));
+document.getElementById("sadd").onclick = () => row({});
+document.getElementById("ssave").onclick = async () => {
+  msg.style.color = ""; msg.textContent = "сохраняю...";
+  try {
+    await post("/api/settings", { servers: collect(), interval: iv.value.trim(), keep_days: keep.value.trim(), thin_every: thin.value.trim() });
+    msg.style.color = "var(--ok)"; msg.textContent = "Сохранено и применено, камеры обновятся в течение минуты";
+  } catch (e) { msg.style.color = "var(--bad)"; msg.textContent = "Ошибка: " + e.message; }
+};
+fetch("/api/settings").then(r => r.json()).then(j => {
+  iv.value = j.interval; keep.value = j.keep_days || ""; thin.value = j.thin_every;
+  refresh(); j.servers.forEach(row);
+});
+})();
+</script></body></html>
