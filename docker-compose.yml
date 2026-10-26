@@ -10,7 +10,7 @@ services:
       TZ: Europe/Moscow
       SAVE_ROOT: /timelapse
       SERVERS_FILE: /app/servers.json
-      OWNER_UID: "1000"   # mike: тот же владелец, что у samba (force user)
+      OWNER_UID: "1000"   # владелец файлов архива (если папку отдаёт samba, тот же пользователь, что в force user)
       OWNER_GID: "1000"
       KEEP_FULL_DAYS: "183"          # минутные снимки хранятся ~6 месяцев
       CLEAN_LOOKBACK_DAYS: "36500"   # прореживать все более старые дни

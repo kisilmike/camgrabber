@@ -68,7 +68,7 @@ function refresh() {
 function row(s) {
   const d = document.createElement("div");
   d.className = "srv";
-  d.innerHTML = `<input class="n" placeholder="имя (hpserver)" value="${esc(s.name)}">
+  d.innerHTML = `<input class="n" placeholder="имя (home)" value="${esc(s.name)}">
     <input class="f" placeholder="Frigate http://адрес:5000" value="${esc(s.frigate)}">
     <input class="g" placeholder="go2rtc http://адрес:1984 (необязательно)" value="${esc(s.go2rtc)}">
     <input class="a" placeholder="замены имён: cam_abc=car, cam_def=entrance" value="${esc(aliasText(s.aliases))}">
